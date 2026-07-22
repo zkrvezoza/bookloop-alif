@@ -1,0 +1,29 @@
+name: Nil checker
+
+env:
+  GOPRIVATE: github.com/alif-academy-uz
+# когда запускать: на push в master/main или при создании PR
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  nilaway:
+    name: 🟢 base · nilaway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: install nilaway
+        run: go install go.uber.org/nilaway/cmd/nilaway@latest
+      - name: nilaway
+        run: nilaway ./...
+      - name: Authenticate with GitHub Package Registry
+        run: git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
