@@ -1,0 +1,117 @@
+name: Go Tests & Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  pull-requests: write
+  contents: write
+  pages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+          cache-dependency-path: |
+            ./go.sum
+
+      - name: Install dependencies
+        run: |
+          go mod tidy
+          go install github.com/t-yuki/gocover-cobertura@latest
+
+      - name: Run tests and collect coverage
+        run: go test $(go list ./... | grep -v '/cmd/') -coverprofile=coverage.out
+
+      - name: Run tests under Race Detector
+        run: go test -race $(go list ./... | grep -v '/cmd/')
+
+      - name: Run Benchmarks  # этот шаг уже был из ДЗ 13
+        run: go test -bench . -benchmem ./... | tee benchmarks.txt
+
+      - name: Format benchmark results
+        if: github.event_name == 'pull_request'
+        run: |
+          echo '## 📊 Benchmark Results' > bench-report.md
+          echo '```' >> bench-report.md
+          cat benchmarks.txt >> bench-report.md
+          echo '```' >> bench-report.md
+
+      - name: Comment benchmark results to PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: benchmark
+          recreate: true
+          path: bench-report.md
+
+      - name: Convert coverage to Cobertura format
+        run: $(which gocover-cobertura) < coverage.out > coverage.xml
+
+      - name: Coverage summary
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage.xml
+          badge: true
+          fail_below_min: false
+          format: markdown
+          indicators: true
+          output: both
+          thresholds: '70 80'
+
+      - name: Add coverage report to pull request
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request'
+        with:
+          recreate: true
+          path: code-coverage-results.md
+
+      - name: Get coverage values
+        id: coverage-values
+        shell: bash
+        run: |
+          total=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: $total%"
+          echo "total=$total" >> $GITHUB_OUTPUT
+
+      - name: Upload Benchmarks Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmarks.txt
+
+      - name: Generate coverage badge SVG
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          npm i -g badgen-cli
+          export COV=${{ steps.coverage-values.outputs.total }}
+          COLOR=$(node -p '
+            const c = +process.env.COV;
+            c >= 80 ? "green" : c >= 70 ? "yellow" : c >= 50 ? "orange" : "red"
+          ')
+          mkdir -p badges
+          badgen -j coverage -s "$COV%" -c "$COLOR" > badges/coverage.svg
+
+      - name: Publish badge to badges branch
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./badges
+          publish_branch: badges
+          keep_files: true
+          commit_message: 'chore(badges): update coverage'
