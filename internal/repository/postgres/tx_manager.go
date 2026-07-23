@@ -27,7 +27,10 @@ func (m *TxManager) WithTx(ctx context.Context, fn func(q Querier) error) error 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) // no-op, если уже закоммичено
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	if err := fn(tx); err != nil {
 		return err
