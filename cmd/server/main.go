@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	deliveryhttp "github.com/bookloop-alif/internal/delivery/http"
 	"github.com/bookloop-alif/internal/config"
+	deliveryhttp "github.com/bookloop-alif/internal/delivery/http"
 	"github.com/bookloop-alif/internal/repository/postgres"
 )
 
