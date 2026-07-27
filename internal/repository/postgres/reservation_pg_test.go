@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -18,8 +19,8 @@ func TestReservationRepo_CreateAndListByUser(t *testing.T) {
 	created, err := repo.Create(ctx, &model.Reservation{
 		BookID: bookID, UserID: userID, Status: model.ReservationWaiting,
 	})
-	if err != nil {
-		t.Fatalf("create failed: %v", err)
+	if err != nil || created == nil {
+		t.Fatalf("create failed, err: %v, created: %v", err, created)
 	}
 	if created.ID == 0 {
 		t.Fatal("expected non-zero id")
@@ -42,13 +43,13 @@ func TestReservationRepo_NextWaiting_FIFOOrder(t *testing.T) {
 
 	userRepo := postgres.NewUserRepo(pool)
 	u2, err := userRepo.Create(ctx, &model.User{Login: "reader2", PasswordHash: "hash", Role: model.RoleUser})
-	if err != nil {
-		t.Fatalf("create second user: %v", err)
+	if err != nil || u2 == nil {
+		t.Fatalf("create second user failed, err: %v, u2: %v", err, u2)
 	}
 
 	first, err := repo.Create(ctx, &model.Reservation{BookID: bookID, UserID: userID, Status: model.ReservationWaiting})
-	if err != nil {
-		t.Fatalf("create first reservation: %v", err)
+	if err != nil || first == nil {
+		t.Fatalf("create first reservation failed, err: %v, first: %v", err, first)
 	}
 
 	time.Sleep(10 * time.Millisecond)
@@ -59,8 +60,8 @@ func TestReservationRepo_NextWaiting_FIFOOrder(t *testing.T) {
 	}
 
 	next, err := repo.NextWaiting(ctx, bookID)
-	if err != nil {
-		t.Fatalf("NextWaiting failed: %v", err)
+	if err != nil || next == nil {
+		t.Fatalf("NextWaiting failed, err: %v, next: %v", err, next)
 	}
 	if next.ID != first.ID {
 		t.Fatalf("want first-created reservation (FIFO), got id=%d want id=%d", next.ID, first.ID)
@@ -73,7 +74,7 @@ func TestReservationRepo_NextWaiting_NoneWaiting(t *testing.T) {
 	repo := postgres.NewReservationRepo(pool)
 
 	_, err := repo.NextWaiting(context.Background(), bookID)
-	if err != model.ErrNotFound {
+	if !errors.Is(err, model.ErrNotFound) {
 		t.Fatalf("want ErrNotFound when no reservations, got %v", err)
 	}
 }
@@ -84,13 +85,16 @@ func TestReservationRepo_MarkFulfilledAndCancel(t *testing.T) {
 	repo := postgres.NewReservationRepo(pool)
 	ctx := context.Background()
 
-	r, _ := repo.Create(ctx, &model.Reservation{BookID: bookID, UserID: userID, Status: model.ReservationWaiting})
+	r, err := repo.Create(ctx, &model.Reservation{BookID: bookID, UserID: userID, Status: model.ReservationWaiting})
+	if err != nil || r == nil {
+		t.Fatalf("create failed, err: %v, r: %v", err, r)
+	}
 
 	if err := repo.MarkFulfilled(ctx, r.ID); err != nil {
 		t.Fatalf("mark fulfilled failed: %v", err)
 	}
 
-	if err := repo.MarkFulfilled(ctx, r.ID); err != model.ErrNotFound {
+	if err := repo.MarkFulfilled(ctx, r.ID); !errors.Is(err, model.ErrNotFound) {
 		t.Fatalf("want ErrNotFound on already-fulfilled, got %v", err)
 	}
 }
@@ -101,14 +105,17 @@ func TestReservationRepo_Cancel(t *testing.T) {
 	repo := postgres.NewReservationRepo(pool)
 	ctx := context.Background()
 
-	r, _ := repo.Create(ctx, &model.Reservation{BookID: bookID, UserID: userID, Status: model.ReservationWaiting})
+	r, err := repo.Create(ctx, &model.Reservation{BookID: bookID, UserID: userID, Status: model.ReservationWaiting})
+	if err != nil || r == nil {
+		t.Fatalf("create failed, err: %v, r: %v", err, r)
+	}
 
 	if err := repo.Cancel(ctx, r.ID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	err := repo.Cancel(ctx, r.ID)
-	if err != model.ErrNotFound {
+	err = repo.Cancel(ctx, r.ID)
+	if !errors.Is(err, model.ErrNotFound) {
 		t.Fatalf("want ErrNotFound on already-cancelled, got %v", err)
 	}
 }
