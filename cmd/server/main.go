@@ -33,7 +33,10 @@ func main() {
 	}
 	defer pool.Close()
 
-	engine := deliveryhttp.New(pool)
+	engine := deliveryhttp.New(deliveryhttp.Deps{
+		Pool:      pool,
+		JWTSecret: cfg.JWTSecret,
+	})
 	srv := deliveryhttp.NewServer(engine, cfg.HTTPPort)
 
 	if err := srv.Start(); err != nil {

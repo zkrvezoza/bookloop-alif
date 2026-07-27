@@ -4,18 +4,45 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/bookloop-alif/internal/delivery/http/handler"
+	"github.com/bookloop-alif/internal/delivery/http/middleware"
+	"github.com/bookloop-alif/internal/repository/postgres"
+	"github.com/bookloop-alif/internal/service"
 )
 
-func New(pool *pgxpool.Pool) *gin.Engine {
+type Deps struct {
+	Pool      *pgxpool.Pool
+	JWTSecret string
+}
+
+func New(d Deps) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 
-	engine.GET("/health", healthHandler(pool))
+	engine.GET("/health", healthHandler(d.Pool))
+
+	userRepo := postgres.NewUserRepo(d.Pool)
+	tokenRepo := postgres.NewRefreshTokenRepo(d.Pool)
+	authSvc := service.NewAuthService(userRepo, tokenRepo, d.JWTSecret)
+	authHandler := handler.NewAuthHandler(authSvc)
 
 	api := engine.Group("/api/v1")
-	_ = api
+	{
+		api.POST("/auth/register", authHandler.Register)
+		api.POST("/auth/login", authHandler.Login)
+		api.POST("/auth/refresh", authHandler.Refresh)
+		api.POST("/auth/logout", authHandler.Logout)
+
+		// читатель(библиотекарь тоже)
+		authed := api.Group("", middleware.Auth([]byte(d.JWTSecret)))
+		_ = authed
+
+		// библиотекарь
+		manage := authed.Group("/manage", middleware.RequireRole("librarian"))
+		_ = manage
+	}
 
 	return engine
 }
