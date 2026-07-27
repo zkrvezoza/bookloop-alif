@@ -4,9 +4,8 @@ on:
   push:
     branches:
       - main
+      - develop
   pull_request:
-    branches:
-      - main
 
 permissions:
   pull-requests: write
@@ -40,7 +39,7 @@ jobs:
       - name: Run tests under Race Detector
         run: go test -race $(go list ./... | grep -v '/cmd/')
 
-      - name: Run Benchmarks  # этот шаг уже был из ДЗ 13
+      - name: Run Benchmarks
         run: go test -bench . -benchmem ./... | tee benchmarks.txt
 
       - name: Format benchmark results
