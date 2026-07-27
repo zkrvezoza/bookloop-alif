@@ -19,8 +19,7 @@ type Deps struct {
 
 func New(d Deps) *gin.Engine {
 	engine := gin.New()
-	engine.Use(gin.Recovery())
-
+	engine.Use(gin.Recovery(), middleware.RequestID(), middleware.AccessLog())
 	engine.GET("/health", healthHandler(d.Pool))
 
 	userRepo := postgres.NewUserRepo(d.Pool)
@@ -35,11 +34,9 @@ func New(d Deps) *gin.Engine {
 		api.POST("/auth/refresh", authHandler.Refresh)
 		api.POST("/auth/logout", authHandler.Logout)
 
-		// читатель(библиотекарь тоже)
 		authed := api.Group("", middleware.Auth([]byte(d.JWTSecret)))
 		_ = authed
 
-		// библиотекарь
 		manage := authed.Group("/manage", middleware.RequireRole("librarian"))
 		_ = manage
 	}
