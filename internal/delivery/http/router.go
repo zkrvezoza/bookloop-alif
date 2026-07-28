@@ -37,7 +37,13 @@ func New(d Deps) *gin.Engine {
 		authed := api.Group("", middleware.Auth([]byte(d.JWTSecret)))
 		_ = authed
 
+		bookRepo := postgres.NewBookRepo(d.Pool)
+		loanRepo := postgres.NewLoanRepo(d.Pool)
+		bookSvc := service.NewBookService(bookRepo, loanRepo)
+		bookManageHandler := handler.NewBookManageHandler(bookSvc)
+
 		manage := authed.Group("/manage", middleware.RequireRole("librarian"))
+		handler.RegisterLibrarianRoutes(manage, bookManageHandler)
 		_ = manage
 	}
 
