@@ -175,7 +175,9 @@ func TestAuthService_RefreshAndLogout(t *testing.T) {
 	svc := service.NewAuthService(users, tokens, "test-secret")
 	ctx := context.Background()
 
-	svc.Register(ctx, "khurliman", "password123", model.RoleUser)
+	if _, err := svc.Register(ctx, "khurliman", "password123", model.RoleUser); err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
 	pair, _ := svc.Login(ctx, "khurliman", "password123")
 
 	t.Run("refresh rotates token", func(t *testing.T) {
