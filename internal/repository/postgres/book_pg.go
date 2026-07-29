@@ -163,3 +163,15 @@ func (r *BookRepo) IncrCopies(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+func (r *BookRepo) MarkLost(ctx context.Context, id int64) error {
+	const q = `UPDATE books SET status = 'lost' WHERE id = $1`
+	tag, err := r.db.Exec(ctx, q, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return model.ErrNotFound
+	}
+	return nil
+}
