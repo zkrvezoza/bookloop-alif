@@ -37,7 +37,6 @@ type TokenPair struct {
 	RefreshToken string
 }
 
-// Register — US-03. Роль выбирается при регистрации: user или librarian.
 func (s *AuthService) Register(ctx context.Context, login, password string, role model.Role) (*model.User, error) {
 	if login == "" || len(password) < minPasswordLen {
 		return nil, model.ErrInvalid
@@ -68,8 +67,6 @@ func (s *AuthService) Login(ctx context.Context, login, password string) (*Token
 
 	return s.issueTokenPair(ctx, u)
 }
-
-//US-04 Логин + refresh-токены
 
 func (s *AuthService) Refresh(ctx context.Context, rawRefresh string) (*TokenPair, error) {
 	rt, err := s.tokens.GetByHash(ctx, hashToken(rawRefresh))
