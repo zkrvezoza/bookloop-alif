@@ -79,3 +79,7 @@ func (s *BookService) SetCoverPath(ctx context.Context, id int64, path string) e
 	b.CoverPath = path
 	return s.books.Update(ctx, b)
 }
+
+func (s *BookService) List(ctx context.Context, f repository.BookFilter) ([]model.Book, int, error) {
+	return s.books.List(ctx, f)
+}
