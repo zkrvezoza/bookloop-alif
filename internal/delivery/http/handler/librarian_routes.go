@@ -3,6 +3,7 @@ package handler
 import "github.com/gin-gonic/gin"
 
 func RegisterLibrarianRoutes(rg *gin.RouterGroup, book *BookManageHandler, loan *LoanManageHandler) {
+	rg.GET("/books", book.List)
 	rg.POST("/books", book.Create)
 	rg.PUT("/books/:id", book.Update)
 	rg.DELETE("/books/:id", book.Delete)
