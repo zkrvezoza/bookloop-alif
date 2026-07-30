@@ -22,16 +22,22 @@ func TestBookRepo_CreateAndGet(t *testing.T) {
 		Status: model.BookAvailable,
 		Copies: 3,
 	})
-	if err != nil || created == nil {
-		t.Fatalf("create failed, err: %v, created: %v", err, created)
+	if err != nil {
+		t.Fatalf("create failed, err: %v", err)
+	}
+	if created == nil {
+		t.Fatal("expected non-nil book from create")
 	}
 	if created.ID == 0 {
 		t.Fatal("expected non-zero id")
 	}
 
 	got, err := repo.GetByID(ctx, created.ID)
-	if err != nil || got == nil {
-		t.Fatalf("get failed, err: %v, got: %v", err, got)
+	if err != nil {
+		t.Fatalf("get failed, err: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil book from get")
 	}
 	if got.Title != "Война и мир" || got.Copies != 3 {
 		t.Fatalf("unexpected book: %+v", got)
@@ -57,8 +63,11 @@ func TestBookRepo_DecrCopies(t *testing.T) {
 		Title: "Test Book", Author: "A", Genre: "g",
 		Status: model.BookAvailable, Copies: 1,
 	})
-	if err != nil || b == nil {
-		t.Fatalf("create failed, err: %v, b: %v", err, b)
+	if err != nil {
+		t.Fatalf("create failed, err: %v", err)
+	}
+	if b == nil {
+		t.Fatal("expected non-nil book")
 	}
 
 	if err := repo.DecrCopies(ctx, b.ID); err != nil {
@@ -71,8 +80,11 @@ func TestBookRepo_DecrCopies(t *testing.T) {
 	}
 
 	got, err := repo.GetByID(ctx, b.ID)
-	if err != nil || got == nil {
-		t.Fatalf("get failed, err: %v, got: %v", err, got)
+	if err != nil {
+		t.Fatalf("get failed, err: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil book")
 	}
 	if got.Copies != 0 {
 		t.Fatalf("copies should be 0, got %d", got.Copies)
@@ -84,9 +96,18 @@ func TestBookRepo_List_Filter(t *testing.T) {
 	repo := postgres.NewBookRepo(pool)
 	ctx := context.Background()
 
-	_, _ = repo.Create(ctx, &model.Book{Title: "Go in Action", Author: "William", Genre: "tech", Status: model.BookAvailable, Copies: 1})
-	_, _ = repo.Create(ctx, &model.Book{Title: "Clean Code", Author: "Robert", Genre: "tech", Status: model.BookAvailable, Copies: 1})
-	_, _ = repo.Create(ctx, &model.Book{Title: "Dune", Author: "Frank", Genre: "scifi", Status: model.BookAvailable, Copies: 1})
+	b1, err := repo.Create(ctx, &model.Book{Title: "Go in Action", Author: "William", Genre: "tech", Status: model.BookAvailable, Copies: 1})
+	if err != nil || b1 == nil {
+		t.Fatalf("setup failed for book 1: %v", err)
+	}
+	b2, err := repo.Create(ctx, &model.Book{Title: "Clean Code", Author: "Robert", Genre: "tech", Status: model.BookAvailable, Copies: 1})
+	if err != nil || b2 == nil {
+		t.Fatalf("setup failed for book 2: %v", err)
+	}
+	b3, err := repo.Create(ctx, &model.Book{Title: "Dune", Author: "Frank", Genre: "scifi", Status: model.BookAvailable, Copies: 1})
+	if err != nil || b3 == nil {
+		t.Fatalf("setup failed for book 3: %v", err)
+	}
 
 	books, total, err := repo.List(ctx, repository.BookFilter{Genre: "tech", Limit: 20, Page: 1})
 	if err != nil {
@@ -103,8 +124,11 @@ func TestBookRepo_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	b, err := repo.Create(ctx, &model.Book{Title: "T", Author: "A", Genre: "g", Status: model.BookAvailable, Copies: 1})
-	if err != nil || b == nil {
-		t.Fatalf("create failed, err: %v, b: %v", err, b)
+	if err != nil {
+		t.Fatalf("create failed, err: %v", err)
+	}
+	if b == nil {
+		t.Fatal("expected non-nil book")
 	}
 
 	if err := repo.Delete(ctx, b.ID); err != nil {
@@ -132,16 +156,22 @@ func TestBookRepo_IncrCopies(t *testing.T) {
 	ctx := context.Background()
 
 	b, err := repo.Create(ctx, &model.Book{Title: "T", Author: "A", Genre: "g", Status: model.BookAvailable, Copies: 1})
-	if err != nil || b == nil {
-		t.Fatalf("create failed, err: %v, b: %v", err, b)
+	if err != nil {
+		t.Fatalf("create failed, err: %v", err)
+	}
+	if b == nil {
+		t.Fatal("expected non-nil book")
 	}
 
 	if err := repo.IncrCopies(ctx, b.ID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got, err := repo.GetByID(ctx, b.ID)
-	if err != nil || got == nil {
-		t.Fatalf("get failed, err: %v, got: %v", err, got)
+	if err != nil {
+		t.Fatalf("get failed, err: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil book")
 	}
 	if got.Copies != 2 {
 		t.Fatalf("want copies=2, got %d", got.Copies)
