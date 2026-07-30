@@ -13,10 +13,11 @@ type LoanService struct {
 	loans repository.LoanRepo
 	books repository.BookRepo
 	res   repository.ReservationRepo
+	uow   repository.UnitOfWork
 }
 
-func NewLoanService(loans repository.LoanRepo, books repository.BookRepo, res repository.ReservationRepo) *LoanService {
-	return &LoanService{loans: loans, books: books, res: res}
+func NewLoanService(loans repository.LoanRepo, books repository.BookRepo, res repository.ReservationRepo, uow repository.UnitOfWork) *LoanService {
+	return &LoanService{loans: loans, books: books, res: res, uow: uow}
 }
 
 func (s *LoanService) List(ctx context.Context, f repository.LoanFilter) ([]model.Loan, int, error) {
@@ -85,4 +86,44 @@ func (s *LoanService) ExtendDueDate(ctx context.Context, loanID int64, days int)
 	}
 	newDue := loan.DueAt.Add(time.Duration(days) * 24 * time.Hour)
 	return s.loans.ExtendDueDate(ctx, loanID, newDue.Format(time.RFC3339))
+}
+
+func (s *LoanService) Borrow(ctx context.Context, userID, bookID int64) (*model.Loan, error) {
+	var loan *model.Loan
+
+	err := s.uow.WithinTx(ctx, func(books repository.BookRepo, loans repository.LoanRepo) error {
+		if err := books.DecrCopies(ctx, bookID); err != nil {
+			return err
+		}
+
+		created, err := loans.Create(ctx, &model.Loan{
+			BookID: bookID,
+			UserID: userID,
+			DueAt:  time.Now().Add(14 * 24 * time.Hour),
+			Status: model.LoanActive,
+		})
+		if err != nil {
+			return err
+		}
+		loan = created
+		return nil
+	})
+
+	return loan, err
+}
+
+func (s *LoanService) MyLoans(ctx context.Context, userID int64, f repository.LoanFilter) ([]model.Loan, int, error) {
+	f.UserID = userID
+	return s.loans.List(ctx, f)
+}
+
+func (s *LoanService) ReturnOwn(ctx context.Context, userID, loanID int64) error {
+	loan, err := s.loans.GetByID(ctx, loanID)
+	if err != nil {
+		return err
+	}
+	if loan.UserID != userID {
+		return model.ErrForbidden
+	}
+	return s.Return(ctx, loanID)
 }
