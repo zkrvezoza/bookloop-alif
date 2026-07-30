@@ -39,12 +39,14 @@ func New(d Deps) *gin.Engine {
 
 		bookRepo := postgres.NewBookRepo(d.Pool)
 		loanRepo := postgres.NewLoanRepo(d.Pool)
-		bookSvc := service.NewBookService(bookRepo, loanRepo)
-		bookManageHandler := handler.NewBookManageHandler(bookSvc)
-		statsRepo := postgres.NewStatsRepo(d.Pool)
 		resRepo := postgres.NewReservationRepo(d.Pool)
+		statsRepo := postgres.NewStatsRepo(d.Pool)
+
 		loanSvc := service.NewLoanService(loanRepo, bookRepo, resRepo)
+		bookSvc := service.NewBookService(bookRepo, loanRepo)
 		statsSvc := service.NewStatsService(statsRepo)
+
+		bookManageHandler := handler.NewBookManageHandler(bookSvc, loanSvc)
 		loanManageHandler := handler.NewLoanManageHandler(loanSvc, statsSvc)
 
 		manage := authed.Group("/manage", middleware.RequireRole("librarian"))
