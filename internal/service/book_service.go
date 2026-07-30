@@ -79,12 +79,3 @@ func (s *BookService) SetCoverPath(ctx context.Context, id int64, path string) e
 	b.CoverPath = path
 	return s.books.Update(ctx, b)
 }
-
-func (s *BookService) MarkLost(ctx context.Context, id int64) error {
-	b, err := s.books.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	b.Status = model.BookLost
-	return s.books.Update(ctx, b)
-}

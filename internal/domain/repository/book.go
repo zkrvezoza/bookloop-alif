@@ -22,4 +22,5 @@ type BookRepo interface {
 	List(ctx context.Context, f BookFilter) ([]model.Book, int, error)
 	DecrCopies(ctx context.Context, id int64) error
 	IncrCopies(ctx context.Context, id int64) error
+	MarkLost(ctx context.Context, id int64) error
 }
