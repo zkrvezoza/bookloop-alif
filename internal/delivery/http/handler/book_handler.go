@@ -6,12 +6,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/bookloop-alif/internal/domain/repository"
 	"github.com/bookloop-alif/internal/response"
 	"github.com/bookloop-alif/internal/service"
 	"github.com/bookloop-alif/internal/storage"
 )
 
-// добавляем в BookManageHandler зависимость на LoanService
 type BookManageHandler struct {
 	books *service.BookService
 	loans *service.LoanService
@@ -19,6 +19,25 @@ type BookManageHandler struct {
 
 func NewBookManageHandler(books *service.BookService, loans *service.LoanService) *BookManageHandler {
 	return &BookManageHandler{books: books, loans: loans}
+}
+
+func (h *BookManageHandler) List(c *gin.Context) {
+	page, _ := strconv.Atoi(c.Query("page"))
+	limit, _ := strconv.Atoi(c.Query("limit"))
+
+	books, total, err := h.books.List(c.Request.Context(), repository.BookFilter{
+		Query:  c.Query("q"),
+		Genre:  c.Query("genre"),
+		Status: c.Query("status"),
+		Page:   page,
+		Limit:  limit,
+	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.JSON(c, http.StatusOK, gin.H{"items": books, "total": total, "page": page})
 }
 
 type createBookRequest struct {

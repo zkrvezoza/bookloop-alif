@@ -34,6 +34,10 @@ func (s *BookService) Get(ctx context.Context, id int64) (*model.Book, error) {
 	return s.books.GetByID(ctx, id)
 }
 
+func (s *BookService) List(ctx context.Context, f repository.BookFilter) ([]model.Book, int, error) {
+	return s.books.List(ctx, f)
+}
+
 type UpdateBookInput struct {
 	Title  string
 	Author string
