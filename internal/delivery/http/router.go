@@ -20,12 +20,33 @@ type Deps struct {
 func New(d Deps) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Recovery(), middleware.RequestID(), middleware.AccessLog())
+
 	engine.GET("/health", healthHandler(d.Pool))
 
+	// --- репозитории ---
 	userRepo := postgres.NewUserRepo(d.Pool)
 	tokenRepo := postgres.NewRefreshTokenRepo(d.Pool)
+	bookRepo := postgres.NewBookRepo(d.Pool)
+	loanRepo := postgres.NewLoanRepo(d.Pool)
+	resRepo := postgres.NewReservationRepo(d.Pool)
+	statsRepo := postgres.NewStatsRepo(d.Pool)
+	txManager := postgres.NewTxManager(d.Pool)
+	uow := postgres.NewUnitOfWork(txManager)
+
+	// --- сервисы ---
 	authSvc := service.NewAuthService(userRepo, tokenRepo, d.JWTSecret)
+	bookSvc := service.NewBookService(bookRepo, loanRepo)
+	loanSvc := service.NewLoanService(loanRepo, bookRepo, resRepo, uow)
+	resSvc := service.NewReservationService(resRepo, bookRepo)
+	statsSvc := service.NewStatsService(statsRepo)
+
+	// --- хендлеры ---
 	authHandler := handler.NewAuthHandler(authSvc)
+	bookReaderHandler := handler.NewBookReaderHandler(bookSvc)
+	loanReaderHandler := handler.NewLoanReaderHandler(loanSvc)
+	reservationHandler := handler.NewReservationHandler(resSvc)
+	bookManageHandler := handler.NewBookManageHandler(bookSvc, loanSvc)
+	loanManageHandler := handler.NewLoanManageHandler(loanSvc, statsSvc)
 
 	api := engine.Group("/api/v1")
 	{
@@ -35,23 +56,10 @@ func New(d Deps) *gin.Engine {
 		api.POST("/auth/logout", authHandler.Logout)
 
 		authed := api.Group("", middleware.Auth([]byte(d.JWTSecret)))
-		_ = authed
-
-		bookRepo := postgres.NewBookRepo(d.Pool)
-		loanRepo := postgres.NewLoanRepo(d.Pool)
-		resRepo := postgres.NewReservationRepo(d.Pool)
-		statsRepo := postgres.NewStatsRepo(d.Pool)
-
-		loanSvc := service.NewLoanService(loanRepo, bookRepo, resRepo)
-		bookSvc := service.NewBookService(bookRepo, loanRepo)
-		statsSvc := service.NewStatsService(statsRepo)
-
-		bookManageHandler := handler.NewBookManageHandler(bookSvc, loanSvc)
-		loanManageHandler := handler.NewLoanManageHandler(loanSvc, statsSvc)
+		handler.RegisterReaderRoutes(authed, bookReaderHandler, loanReaderHandler, reservationHandler)
 
 		manage := authed.Group("/manage", middleware.RequireRole("librarian"))
 		handler.RegisterLibrarianRoutes(manage, bookManageHandler, loanManageHandler)
-		_ = manage
 	}
 
 	return engine
