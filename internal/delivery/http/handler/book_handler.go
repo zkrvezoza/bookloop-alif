@@ -11,12 +11,14 @@ import (
 	"github.com/bookloop-alif/internal/storage"
 )
 
+// добавляем в BookManageHandler зависимость на LoanService
 type BookManageHandler struct {
 	books *service.BookService
+	loans *service.LoanService
 }
 
-func NewBookManageHandler(books *service.BookService) *BookManageHandler {
-	return &BookManageHandler{books: books}
+func NewBookManageHandler(books *service.BookService, loans *service.LoanService) *BookManageHandler {
+	return &BookManageHandler{books: books, loans: loans}
 }
 
 type createBookRequest struct {
@@ -136,4 +138,19 @@ func (h *BookManageHandler) GetCover(c *gin.Context) {
 	}
 
 	c.File(b.CoverPath)
+}
+
+func (h *BookManageHandler) MarkLost(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	if err := h.loans.MarkLost(c.Request.Context(), id); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	c.Status(http.StatusOK)
 }

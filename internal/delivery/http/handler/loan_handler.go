@@ -16,6 +16,10 @@ type LoanManageHandler struct {
 	stats *service.StatsService
 }
 
+type extendRequest struct {
+	Days int `json:"days" binding:"required"`
+}
+
 func NewLoanManageHandler(loans *service.LoanService, stats *service.StatsService) *LoanManageHandler {
 	return &LoanManageHandler{loans: loans, stats: stats}
 }
@@ -55,4 +59,40 @@ func (h *LoanManageHandler) Stats(c *gin.Context) {
 		return
 	}
 	response.JSON(c, http.StatusOK, stats)
+}
+
+func (h *LoanManageHandler) Return(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid loan id"})
+		return
+	}
+
+	if err := h.loans.Return(c.Request.Context(), id); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+func (h *LoanManageHandler) Extend(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid loan id"})
+		return
+	}
+
+	var req extendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if err := h.loans.ExtendDueDate(c.Request.Context(), id, req.Days); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	c.Status(http.StatusOK)
 }
