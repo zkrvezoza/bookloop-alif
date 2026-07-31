@@ -19,7 +19,7 @@ type Config struct {
 
 func Load() (*Config, error) {
 	_ = godotenv.Load()
-	
+
 	cfg := &Config{
 		DBHost:     getEnv("DB_HOST", "localhost"),
 		DBPort:     getEnv("DB_PORT", "5432"),

@@ -148,3 +148,202 @@ func (m *mockBookRepo) MarkLost(
 
 	return m.markLostFn(ctx, id)
 }
+
+func TestBookService_Create_OK(t *testing.T) {
+	repo := &mockBookRepo{
+		createFn: func(ctx context.Context, book *model.Book) (*model.Book, error) {
+			book.ID = 1
+			return book, nil
+		},
+	}
+
+	svc := NewBookService(repo, nil)
+
+	got, err := svc.Create(
+		context.Background(),
+		"Dune",
+		"Frank Herbert",
+		"Science Fiction",
+		3,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got.Title != "Dune" {
+		t.Fatalf("expected title Dune, got %q", got.Title)
+	}
+
+	if got.Status != model.BookAvailable {
+		t.Fatalf("expected status %q, got %q", model.BookAvailable, got.Status)
+	}
+
+	if got.Copies != 3 {
+		t.Fatalf("expected 3 copies, got %d", got.Copies)
+	}
+}
+
+func TestBookService_Create_InvalidInput(t *testing.T) {
+	tests := []struct {
+		name   string
+		title  string
+		author string
+		genre  string
+		copies int
+	}{
+		{
+			name:   "empty title",
+			title:  "",
+			author: "Frank Herbert",
+			genre:  "Science Fiction",
+			copies: 3,
+		},
+		{
+			name:   "empty author",
+			title:  "Dune",
+			author: "",
+			genre:  "Science Fiction",
+			copies: 3,
+		},
+		{
+			name:   "empty genre",
+			title:  "Dune",
+			author: "Frank Herbert",
+			genre:  "",
+			copies: 3,
+		},
+		{
+			name:   "zero copies",
+			title:  "Dune",
+			author: "Frank Herbert",
+			genre:  "Science Fiction",
+			copies: 0,
+		},
+		{
+			name:   "negative copies",
+			title:  "Dune",
+			author: "Frank Herbert",
+			genre:  "Science Fiction",
+			copies: -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewBookService(&mockBookRepo{}, nil)
+
+			got, err := svc.Create(
+				context.Background(),
+				tt.title,
+				tt.author,
+				tt.genre,
+				tt.copies,
+			)
+
+			if !errors.Is(err, model.ErrInvalid) {
+				t.Fatalf("expected ErrInvalid, got %v", err)
+			}
+
+			if got != nil {
+				t.Fatalf("expected nil book, got %#v", got)
+			}
+		})
+	}
+}
+
+func TestBookService_Create_RepoError(t *testing.T) {
+	expectedErr := errors.New("database failed")
+
+	repo := &mockBookRepo{
+		createFn: func(ctx context.Context, book *model.Book) (*model.Book, error) {
+			return nil, expectedErr
+		},
+	}
+
+	svc := NewBookService(repo, nil)
+
+	_, err := svc.Create(
+		context.Background(),
+		"Dune",
+		"Frank Herbert",
+		"Science Fiction",
+		3,
+	)
+
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected %v, got %v", expectedErr, err)
+	}
+}
+
+func TestBookService_List_OK(t *testing.T) {
+	expectedBooks := []model.Book{
+		{ID: 1, Title: "Dune"},
+		{ID: 2, Title: "1984"},
+	}
+
+	repo := &mockBookRepo{
+		listFn: func(
+			ctx context.Context,
+			filter repository.BookFilter,
+		) ([]model.Book, int, error) {
+			return expectedBooks, 2, nil
+		},
+	}
+
+	svc := NewBookService(repo, nil)
+
+	got, total, err := svc.List(
+		context.Background(),
+		repository.BookFilter{Page: 1, Limit: 10},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if total != 2 {
+		t.Fatalf("expected total 2, got %d", total)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 books, got %d", len(got))
+	}
+}
+
+func TestBookService_Delete_OK(t *testing.T) {
+	var deletedID int64
+
+	repo := &mockBookRepo{
+		deleteFn: func(ctx context.Context, id int64) error {
+			deletedID = id
+			return nil
+		},
+	}
+
+	svc := NewBookService(repo, nil)
+
+	err := svc.Delete(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if deletedID != 7 {
+		t.Fatalf("expected deleted ID 7, got %d", deletedID)
+	}
+}
+
+func TestBookService_Delete_RepoError(t *testing.T) {
+	expectedErr := errors.New("delete failed")
+
+	repo := &mockBookRepo{
+		deleteFn: func(ctx context.Context, id int64) error {
+			return expectedErr
+		},
+	}
+
+	svc := NewBookService(repo, nil)
+
+	err := svc.Delete(context.Background(), 7)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected %v, got %v", expectedErr, err)
+	}
+}
