@@ -23,7 +23,7 @@ func New(d Deps) *gin.Engine {
 
 	engine.GET("/health", healthHandler(d.Pool))
 
-	// --- репозитории ---
+	//репозитории
 	userRepo := postgres.NewUserRepo(d.Pool)
 	tokenRepo := postgres.NewRefreshTokenRepo(d.Pool)
 	bookRepo := postgres.NewBookRepo(d.Pool)
@@ -33,14 +33,14 @@ func New(d Deps) *gin.Engine {
 	txManager := postgres.NewTxManager(d.Pool)
 	uow := postgres.NewUnitOfWork(txManager)
 
-	// --- сервисы ---
+	//сервисы
 	authSvc := service.NewAuthService(userRepo, tokenRepo, d.JWTSecret)
 	bookSvc := service.NewBookService(bookRepo, loanRepo)
 	loanSvc := service.NewLoanService(loanRepo, bookRepo, resRepo, uow)
 	resSvc := service.NewReservationService(resRepo, bookRepo)
 	statsSvc := service.NewStatsService(statsRepo)
 
-	// --- хендлеры ---
+	//хендлеры
 	authHandler := handler.NewAuthHandler(authSvc)
 	bookReaderHandler := handler.NewBookReaderHandler(bookSvc)
 	loanReaderHandler := handler.NewLoanReaderHandler(loanSvc)
