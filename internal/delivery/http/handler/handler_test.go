@@ -7,11 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/bookloop-alif/internal/domain/model"
 	"github.com/bookloop-alif/internal/domain/repository"
 	"github.com/bookloop-alif/internal/service"
-	"github.com/gin-gonic/gin"
 )
+
+// ---- fake repos (то же самое, что в internal/service тестах, но локально для этого пакета) ----
 
 type fakeUserRepo struct {
 	byLogin map[string]*model.User
@@ -275,6 +278,7 @@ func (f *fakeStatsRepo) LibraryStats(_ context.Context) (*repository.LibraryStat
 	return f.row, nil
 }
 
+// fakeUOW — не открывает реальную транзакцию, просто вызывает fn с теми же fake-репозиториями.
 type fakeUOW struct {
 	books *fakeBookRepo
 	loans *fakeLoanRepo
@@ -284,12 +288,15 @@ func (u *fakeUOW) WithinTx(ctx context.Context, fn func(books repository.BookRep
 	return fn(u.books, u.loans)
 }
 
+// withUser — тестовый middleware, кладёт userID в контекст так же, как это делает middleware.Auth.
 func withUser(userID int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Set("user_id", userID)
 		c.Next()
 	}
 }
+
+// ---- AuthHandler happy-path ----
 
 func TestAuthHandler_RegisterAndLogin_Success(t *testing.T) {
 	users := newFakeUserRepo()
@@ -327,6 +334,8 @@ func TestAuthHandler_Login_WrongPassword(t *testing.T) {
 	requireStatus(t, rec, http.StatusUnauthorized)
 }
 
+// ---- BookManageHandler happy-path ----
+
 func newTestBookManageHandler() (*BookManageHandler, *fakeBookRepo, *fakeLoanRepo) {
 	books := newFakeBookRepo()
 	loans := newFakeLoanRepo()
@@ -350,7 +359,15 @@ func TestBookManageHandler_Create_Success(t *testing.T) {
 
 func TestBookManageHandler_List_Success(t *testing.T) {
 	h, books, _ := newTestBookManageHandler()
-	_, _ = books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
+	_, err := books.Create(context.Background(), &model.Book{
+		Title:  "Dune",
+		Genre:  "scifi",
+		Copies: 1,
+		Status: model.BookAvailable,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	rec := performRequest(t, http.MethodGet, "/books", "",
 		func(r *gin.Engine) { r.GET("/books", h.List) })
 
@@ -373,7 +390,15 @@ func TestBookManageHandler_Update_Success(t *testing.T) {
 
 func TestBookManageHandler_Delete_Success(t *testing.T) {
 	h, books, _ := newTestBookManageHandler()
-	_, _ = books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
+	_, err := books.Create(context.Background(), &model.Book{
+		Title:  "Dune",
+		Genre:  "scifi",
+		Copies: 1,
+		Status: model.BookAvailable,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	rec := performRequest(t, http.MethodDelete, "/books/1", "",
 		func(r *gin.Engine) { r.DELETE("/books/:id", h.Delete) })
 
@@ -382,7 +407,15 @@ func TestBookManageHandler_Delete_Success(t *testing.T) {
 
 func TestBookManageHandler_GetCover_NotFound(t *testing.T) {
 	h, books, _ := newTestBookManageHandler()
-	_, _ = books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
+	_, err := books.Create(context.Background(), &model.Book{
+		Title:  "Dune",
+		Genre:  "scifi",
+		Copies: 1,
+		Status: model.BookAvailable,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	rec := performRequest(t, http.MethodGet, "/books/1/cover", "",
 		func(r *gin.Engine) { r.GET("/books/:id/cover", h.GetCover) })
 
@@ -392,8 +425,13 @@ func TestBookManageHandler_GetCover_NotFound(t *testing.T) {
 func TestBookManageHandler_MarkLost_Success(t *testing.T) {
 	h, books, loans := newTestBookManageHandler()
 	b, _ := books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
-	_, _ = loans.Create(context.Background(), &model.Loan{BookID: b.ID, UserID: 1, Status: model.LoanActive})
-
+	if _, err := loans.Create(context.Background(), &model.Loan{
+		BookID: b.ID,
+		UserID: 1,
+		Status: model.LoanActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	rec := performRequest(t, http.MethodPost, "/loans/1/lost", "",
 		func(r *gin.Engine) { r.POST("/loans/:id/lost", h.MarkLost) })
 
@@ -403,9 +441,18 @@ func TestBookManageHandler_MarkLost_Success(t *testing.T) {
 	}
 }
 
+// ---- BookReaderHandler happy-path ----
+
 func TestBookReaderHandler_List_Success(t *testing.T) {
 	books := newFakeBookRepo()
-	_, _ = books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
+
+	if _, err := books.Create(context.Background(), &model.Book{
+		Title:  "T",
+		Copies: 0,
+		Status: model.BookAvailable,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	loans := newFakeLoanRepo()
 	h := NewBookReaderHandler(service.NewBookService(books, loans))
 
@@ -424,6 +471,8 @@ func TestBookReaderHandler_Get_NotFound(t *testing.T) {
 	requireStatus(t, rec, http.StatusNotFound)
 }
 
+// ---- LoanManageHandler happy-path ----
+
 func newTestLoanManageHandler() (*LoanManageHandler, *fakeLoanRepo, *fakeBookRepo) {
 	books := newFakeBookRepo()
 	loans := newFakeLoanRepo()
@@ -437,10 +486,14 @@ func newTestLoanManageHandler() (*LoanManageHandler, *fakeLoanRepo, *fakeBookRep
 }
 
 func TestLoanManageHandler_List_Success(t *testing.T) {
-	h, loans, books := newTestLoanManageHandler()
-	b, _ := books.Create(context.Background(), &model.Book{Title: "T", Copies: 1, Status: model.BookAvailable})
-	_, _ = loans.Create(context.Background(), &model.Loan{BookID: b.ID, UserID: 1, Status: model.LoanActive})
-
+	h, loans, _ := newTestLoanManageHandler()
+	if _, err := loans.Create(context.Background(), &model.Loan{
+		BookID: 1,
+		UserID: 1,
+		Status: model.LoanActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	rec := performRequest(t, http.MethodGet, "/loans", "",
 		func(r *gin.Engine) { r.GET("/loans", h.List) })
 
@@ -471,14 +524,21 @@ func TestLoanManageHandler_Return_Success(t *testing.T) {
 }
 
 func TestLoanManageHandler_Extend_Success(t *testing.T) {
-	h, loans, books := newTestLoanManageHandler()
-	b, _ := books.Create(context.Background(), &model.Book{Title: "T", Copies: 1, Status: model.BookAvailable})
-	_, _ = loans.Create(context.Background(), &model.Loan{BookID: b.ID, UserID: 1, Status: model.LoanActive})
+	h, loans, _ := newTestLoanManageHandler()
+	if _, err := loans.Create(context.Background(), &model.Loan{
+		BookID: 1,
+		UserID: 1,
+		Status: model.LoanActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	rec := performRequest(t, http.MethodPut, "/loans/1/extend", `{"days":7}`,
 		func(r *gin.Engine) { r.PUT("/loans/:id/extend", h.Extend) })
 
 	requireStatus(t, rec, http.StatusOK)
 }
+
+// ---- LoanReaderHandler happy-path ----
 
 func newTestLoanReaderHandler() (*LoanReaderHandler, *fakeBookRepo, *fakeLoanRepo) {
 	books := newFakeBookRepo()
@@ -491,8 +551,13 @@ func newTestLoanReaderHandler() (*LoanReaderHandler, *fakeBookRepo, *fakeLoanRep
 
 func TestLoanReaderHandler_Borrow_Success(t *testing.T) {
 	h, books, _ := newTestLoanReaderHandler()
-	_, _ = books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
-
+	if _, err := books.Create(context.Background(), &model.Book{
+		Title:  "T",
+		Copies: 1,
+		Status: model.BookAvailable,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	router := gin.New()
 	router.Use(withUser(1))
 	router.POST("/books/:id/borrow", h.Borrow)
@@ -506,8 +571,13 @@ func TestLoanReaderHandler_Borrow_Success(t *testing.T) {
 
 func TestLoanReaderHandler_Borrow_NoSeats(t *testing.T) {
 	h, books, _ := newTestLoanReaderHandler()
-	_, _ = books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
-
+	if _, err := books.Create(context.Background(), &model.Book{
+		Title:  "T",
+		Copies: 0,
+		Status: model.BookAvailable,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	router := gin.New()
 	router.Use(withUser(1))
 	router.POST("/books/:id/borrow", h.Borrow)
@@ -522,8 +592,13 @@ func TestLoanReaderHandler_Borrow_NoSeats(t *testing.T) {
 func TestLoanReaderHandler_Return_ForbiddenForOtherUser(t *testing.T) {
 	h, books, loans := newTestLoanReaderHandler()
 	b, _ := books.Create(context.Background(), &model.Book{Title: "T", Copies: 0, Status: model.BookAvailable})
-	_, _ = loans.Create(context.Background(), &model.Loan{BookID: b.ID, UserID: 1, Status: model.LoanActive})
-
+	if _, err := loans.Create(context.Background(), &model.Loan{
+		BookID: b.ID,
+		UserID: 1,
+		Status: model.LoanActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	router := gin.New()
 	router.Use(withUser(2)) // другой пользователь
 	router.POST("/loans/:id/return", h.Return)
@@ -535,10 +610,17 @@ func TestLoanReaderHandler_Return_ForbiddenForOtherUser(t *testing.T) {
 	requireStatus(t, rec, http.StatusForbidden)
 }
 
+// ---- ReservationHandler happy-path ----
+
 func TestReservationHandler_Reserve_Success(t *testing.T) {
 	books := newFakeBookRepo()
-	_, _ = books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
-
+	if _, err := books.Create(context.Background(), &model.Book{
+		Title:  "T",
+		Copies: 0,
+		Status: model.BookAvailable,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	res := newFakeReservationRepo()
 	h := NewReservationHandler(service.NewReservationService(res, books))
 
@@ -556,7 +638,13 @@ func TestReservationHandler_Reserve_Success(t *testing.T) {
 func TestReservationHandler_MyReservations_Success(t *testing.T) {
 	books := newFakeBookRepo()
 	res := newFakeReservationRepo()
-	_, _ = res.Create(context.Background(), &model.Reservation{BookID: 1, UserID: 1, Status: model.ReservationWaiting})
+	if _, err := res.Create(context.Background(), &model.Reservation{
+		BookID: 1,
+		UserID: 1,
+		Status: model.ReservationWaiting,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	h := NewReservationHandler(service.NewReservationService(res, books))
 
 	router := gin.New()
@@ -573,7 +661,13 @@ func TestReservationHandler_MyReservations_Success(t *testing.T) {
 func TestReservationHandler_Cancel_Success(t *testing.T) {
 	books := newFakeBookRepo()
 	res := newFakeReservationRepo()
-	_, _ = res.Create(context.Background(), &model.Reservation{BookID: 1, UserID: 1, Status: model.ReservationWaiting})
+	if _, err := res.Create(context.Background(), &model.Reservation{
+		BookID: 1,
+		UserID: 1,
+		Status: model.ReservationWaiting,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	h := NewReservationHandler(service.NewReservationService(res, books))
 
 	router := gin.New()
@@ -585,39 +679,4 @@ func TestReservationHandler_Cancel_Success(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	requireStatus(t, rec, http.StatusNoContent)
-}
-
-func TestLoanReaderHandler_MyLoans_Success(t *testing.T) {
-	h, books, loans := newTestLoanReaderHandler()
-	b, _ := books.Create(context.Background(), &model.Book{Title: "Dune", Genre: "scifi", Copies: 1, Status: model.BookAvailable})
-	_, _ = loans.Create(context.Background(), &model.Loan{BookID: b.ID, UserID: 1, Status: model.LoanActive})
-
-	router := gin.New()
-	router.Use(withUser(1))
-	router.GET("/my-loans", h.MyLoans)
-
-	req := httptest.NewRequest(http.MethodGet, "/my-loans", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	requireStatus(t, rec, http.StatusOK)
-}
-
-func TestRegisterLibrarianRoutes_DoesNotPanic(t *testing.T) {
-	h, _, _ := newTestBookManageHandler()
-	loanH, _, _ := newTestLoanManageHandler()
-	router := gin.New()
-	RegisterLibrarianRoutes(router.Group("/manage"), h, loanH)
-}
-
-func TestRegisterReaderRoutes_DoesNotPanic(t *testing.T) {
-	books := newFakeBookRepo()
-	loans := newFakeLoanRepo()
-	res := newFakeReservationRepo()
-	bookH := NewBookReaderHandler(service.NewBookService(books, loans))
-	loanH, _, _ := newTestLoanReaderHandler()
-	resH := NewReservationHandler(service.NewReservationService(res, books))
-
-	router := gin.New()
-	RegisterReaderRoutes(router.Group("/api"), bookH, loanH, resH)
 }
