@@ -187,3 +187,19 @@ func TestBookRepo_Update_NotFound(t *testing.T) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
+
+func TestBookRepo_MarkLost(t *testing.T) {
+	pool := setupTestDB(t)
+	repo := postgres.NewBookRepo(pool)
+	ctx := context.Background()
+
+	b, _ := repo.Create(ctx, &model.Book{Title: "T", Author: "A", Genre: "g", Status: model.BookAvailable, Copies: 1})
+
+	if err := repo.MarkLost(ctx, b.ID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got, _ := repo.GetByID(ctx, b.ID)
+	if got.Status != model.BookLost {
+		t.Fatalf("want status lost, got %s", got.Status)
+	}
+}
